@@ -19,7 +19,6 @@ function Feedback() {
       setError("");
 
       const token = localStorage.getItem("access_token");
-
       const sessionId = localStorage.getItem(
         "completed_session_id"
       );
@@ -34,6 +33,11 @@ function Feedback() {
         return;
       }
 
+      console.log(
+        "Loading answers for session:",
+        sessionId
+      );
+
       const response = await api.get(
         `/api/interview/session/${sessionId}/answers`,
         {
@@ -44,14 +48,23 @@ function Feedback() {
       );
 
       if (!response.data.success) {
-        setError("Could not load your interview answers.");
+        setError(
+          "Could not load your interview answers."
+        );
         return;
       }
 
       const answers = response.data.answers || [];
 
+      console.log(
+        "Answers received:",
+        answers.length
+      );
+
       if (answers.length === 0) {
-        setError("No answers were found for this interview.");
+        setError(
+          "No answers were found for this interview."
+        );
         return;
       }
 
@@ -61,7 +74,10 @@ function Feedback() {
         token
       );
     } catch (error) {
-      console.error("Feedback loading error:", error);
+      console.error(
+        "Feedback loading error:",
+        error
+      );
 
       setError(
         error.response?.data?.message ||
@@ -69,6 +85,102 @@ function Feedback() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createFailedFeedback = () => ({
+    evaluationFailed: true,
+    score: null,
+    strengths: [
+      "AI evaluation was unavailable for this response.",
+    ],
+    improvements: [
+      "This answer could not be evaluated because the AI service did not return feedback.",
+    ],
+    better_answer:
+      "No improved answer is available.",
+  });
+
+  const createEmptyAnswerFeedback = () => ({
+    evaluationFailed: false,
+    score: 0,
+    strengths: [
+      "No answer was provided.",
+    ],
+    improvements: [
+      "Try to answer every interview question.",
+    ],
+    better_answer:
+      "Provide a clear and relevant answer to the question.",
+  });
+
+  const evaluateSingleAnswer = async (
+    item,
+    sessionId,
+    token
+  ) => {
+    try {
+      console.log(
+        "Trying individual evaluation for question:",
+        item.question_id
+      );
+
+      const response = await api.post(
+        "/api/ai/feedback",
+        {
+          session_id: Number(sessionId),
+          question_id: item.question_id,
+          question: item.question,
+          answer: item.answer,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (
+        response.data?.success &&
+        response.data?.feedback
+      ) {
+        const feedback =
+          response.data.feedback;
+
+        return {
+          score:
+            typeof feedback.score === "number"
+              ? feedback.score
+              : Number(feedback.score),
+
+          strengths: Array.isArray(
+            feedback.strengths
+          )
+            ? feedback.strengths
+            : [],
+
+          improvements: Array.isArray(
+            feedback.improvements
+          )
+            ? feedback.improvements
+            : [],
+
+          better_answer:
+            feedback.better_answer ||
+            "No improved answer available.",
+
+          evaluationFailed: false,
+        };
+      }
+
+      return createFailedFeedback();
+    } catch (error) {
+      console.error(
+        "Individual evaluation failed:",
+        error
+      );
+
+      return createFailedFeedback();
     }
   };
 
@@ -85,85 +197,104 @@ function Feedback() {
       const nonEmptyAnswers = [];
 
       answers.forEach((item) => {
-        if (!item.answer || !item.answer.trim()) {
+        if (
+          !item.answer ||
+          !item.answer.trim()
+        ) {
           allResults.push({
             ...item,
-            feedback: {
-              score: 0,
-              evaluationFailed: false,
-              strengths: [
-                "No answer was provided.",
-              ],
-              improvements: [
-                "Try to answer every interview question.",
-              ],
-              better_answer:
-                "Provide a clear and relevant answer to the question.",
-            },
+            feedback:
+              createEmptyAnswerFeedback(),
           });
         } else {
           nonEmptyAnswers.push(item);
         }
       });
 
+      console.log(
+        "Answers requiring AI evaluation:",
+        nonEmptyAnswers.length
+      );
+
       const batchSize = 5;
-      const batches = [];
 
       for (
         let i = 0;
         i < nonEmptyAnswers.length;
         i += batchSize
       ) {
-        batches.push(
+        const batch =
           nonEmptyAnswers.slice(
             i,
             i + batchSize
-          )
-        );
-      }
+          );
 
-      for (
-        let batchIndex = 0;
-        batchIndex < batches.length;
-        batchIndex++
-      ) {
-        const batch = batches[batchIndex];
+        const batchNumber =
+          Math.floor(i / batchSize) + 1;
+
+        const totalBatches =
+          Math.ceil(
+            nonEmptyAnswers.length /
+              batchSize
+          );
 
         console.log(
-          `Evaluating batch ${batchIndex + 1}/${batches.length}`
+          `Evaluating batch ${batchNumber}/${totalBatches}`
         );
 
+        let batchWorked = false;
+
         try {
-          const response = await api.post(
-            "/api/ai/feedback-batch",
-            {
-              session_id: Number(sessionId),
-              answers: batch.map((item) => ({
-                question_id: item.question_id,
-                question: item.question,
-                answer: item.answer,
-              })),
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
+          const response =
+            await api.post(
+              "/api/ai/feedback-batch",
+              {
+                session_id:
+                  Number(sessionId),
+
+                answers: batch.map(
+                  (item) => ({
+                    question_id:
+                      item.question_id,
+                    question:
+                      item.question,
+                    answer:
+                      item.answer,
+                  })
+                ),
               },
-            }
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+          console.log(
+            "Batch response:",
+            response.data
           );
 
           if (
-            response.data.success &&
-            Array.isArray(response.data.results)
+            response.data?.success &&
+            Array.isArray(
+              response.data?.results
+            ) &&
+            response.data.results
+              .length > 0
           ) {
-            const batchResults =
-              response.data.results;
+            batchWorked = true;
 
             batch.forEach((item) => {
               const generatedFeedback =
-                batchResults.find(
+                response.data.results.find(
                   (result) =>
-                    Number(result.question_id) ===
-                    Number(item.question_id)
+                    Number(
+                      result.question_id
+                    ) ===
+                    Number(
+                      item.question_id
+                    )
                 );
 
               if (
@@ -173,157 +304,158 @@ function Feedback() {
               ) {
                 allResults.push({
                   ...item,
+
                   feedback: {
                     score: Number(
                       generatedFeedback.score
                     ),
+
                     strengths:
                       Array.isArray(
                         generatedFeedback.strengths
                       )
                         ? generatedFeedback.strengths
                         : [],
+
                     improvements:
                       Array.isArray(
                         generatedFeedback.improvements
                       )
                         ? generatedFeedback.improvements
                         : [],
+
                     better_answer:
                       generatedFeedback.better_answer ||
                       "No improved answer available.",
+
                     evaluationFailed: false,
                   },
                 });
               } else {
                 allResults.push({
                   ...item,
-                  feedback: {
-                    evaluationFailed: true,
-                    strengths: [
-                      "AI evaluation was unavailable for this response.",
-                    ],
-                    improvements: [
-                      "This answer could not be evaluated because the AI service did not return feedback.",
-                    ],
-                    better_answer:
-                      "No improved answer is available.",
-                  },
+                  feedback:
+                    createFailedFeedback(),
                 });
               }
-            });
-          } else {
-            batch.forEach((item) => {
-              allResults.push({
-                ...item,
-                feedback: {
-                  evaluationFailed: true,
-                  strengths: [
-                    "AI evaluation was unavailable for this response.",
-                  ],
-                  improvements: [
-                    "This answer could not be evaluated because the AI service did not return feedback.",
-                  ],
-                  better_answer:
-                    "No improved answer is available.",
-                },
-              });
             });
           }
         } catch (error) {
           console.error(
-            `Batch ${batchIndex + 1} feedback error:`,
+            `Batch ${batchNumber} failed:`,
             error
           );
-
-          batch.forEach((item) => {
-            allResults.push({
-              ...item,
-              feedback: {
-                evaluationFailed: true,
-                strengths: [
-                  "AI evaluation was unavailable for this response.",
-                ],
-                improvements: [
-                  "This answer could not be evaluated because the AI service did not return feedback.",
-                ],
-                better_answer:
-                  "No improved answer is available.",
-              },
-            });
-          });
         }
 
-        if (batchIndex < batches.length - 1) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000)
+        if (!batchWorked) {
+          console.log(
+            `Batch ${batchNumber} failed. Using individual evaluation fallback.`
+          );
+
+          for (const item of batch) {
+            const feedback =
+              await evaluateSingleAnswer(
+                item,
+                sessionId,
+                token
+              );
+
+            allResults.push({
+              ...item,
+              feedback,
+            });
+
+            await new Promise(
+              (resolve) =>
+                setTimeout(resolve, 700)
+            );
+          }
+        }
+
+        if (
+          i + batchSize <
+          nonEmptyAnswers.length
+        ) {
+          await new Promise(
+            (resolve) =>
+              setTimeout(resolve, 1000)
           );
         }
       }
 
-      const orderedResults = answers.map(
-        (originalItem) => {
-          const matchingResult =
-            allResults.find(
-              (result) =>
-                Number(result.question_id) ===
-                Number(originalItem.question_id)
-            );
+      const orderedResults =
+        answers.map(
+          (originalItem) => {
+            const matchingResult =
+              allResults.find(
+                (result) =>
+                  Number(
+                    result.question_id
+                  ) ===
+                  Number(
+                    originalItem.question_id
+                  )
+              );
 
-          return (
-            matchingResult || {
-              ...originalItem,
-              feedback: {
-                evaluationFailed: true,
-                strengths: [
-                  "AI evaluation was unavailable for this response.",
-                ],
-                improvements: [
-                  "This answer could not be evaluated.",
-                ],
-                better_answer:
-                  "No improved answer is available.",
-              },
-            }
-          );
-        }
+            return (
+              matchingResult || {
+                ...originalItem,
+                feedback:
+                  createFailedFeedback(),
+              }
+            );
+          }
+        );
+
+      console.log(
+        "Final feedback results:",
+        orderedResults
       );
 
-      setFeedbackItems(orderedResults);
+      setFeedbackItems(
+        orderedResults
+      );
 
-      const validScores = orderedResults
-        .filter(
-          (item) =>
-            item.feedback &&
-            item.feedback.evaluationFailed !== true &&
-            typeof item.feedback.score === "number" &&
-            !Number.isNaN(item.feedback.score)
-        )
-        .map(
-          (item) => item.feedback.score
-        );
+      const validScores =
+        orderedResults
+          .filter(
+            (item) =>
+              item.feedback &&
+              item.feedback
+                .evaluationFailed !==
+                true &&
+              typeof item.feedback
+                .score === "number" &&
+              Number.isFinite(
+                item.feedback.score
+              )
+          )
+          .map(
+            (item) =>
+              item.feedback.score
+          );
 
       console.log(
         "Valid AI scores:",
         validScores
       );
 
-      if (validScores.length > 0) {
-        const total = validScores.reduce(
-          (sum, score) => sum + score,
-          0
-        );
+      if (
+        validScores.length > 0
+      ) {
+        const total =
+          validScores.reduce(
+            (sum, score) =>
+              sum + score,
+            0
+          );
 
         const average =
-          total / validScores.length;
+          total /
+          validScores.length;
 
         const roundedAverage =
           Math.round(average);
-
-        console.log(
-          "AI score total:",
-          total
-        );
 
         console.log(
           "AI evaluated questions:",
@@ -383,7 +515,9 @@ function Feedback() {
             feedback.
           </p>
 
-          <div style={styles.loadingLine}></div>
+          <div
+            style={styles.loadingLine}
+          ></div>
         </div>
       </div>
     );
@@ -426,9 +560,6 @@ function Feedback() {
       <div style={styles.decorTwo}></div>
 
       <div style={styles.container}>
-
-        {/* HEADER */}
-
         <div style={styles.header}>
           <div>
             <p style={styles.eyebrow}>
@@ -454,7 +585,11 @@ function Feedback() {
             <div style={styles.score}>
               {overallScore}
 
-              <span style={styles.scoreCardSpan}>
+              <span
+                style={
+                  styles.scoreCardSpan
+                }
+              >
                 /100
               </span>
             </div>
@@ -465,41 +600,53 @@ function Feedback() {
           </div>
         </div>
 
-        {/* OVERVIEW */}
-
         <div style={styles.overviewCard}>
           <div>
-            <p style={styles.overviewLabel}>
+            <p
+              style={
+                styles.overviewLabel
+              }
+            >
               INTERVIEW SUMMARY
             </p>
 
-            <h2 style={styles.overviewTitle}>
+            <h2
+              style={
+                styles.overviewTitle
+              }
+            >
               You've completed your
               interview.
             </h2>
 
-            <p style={styles.overviewText}>
-              Review each response
-              below to understand
-              what you did well and
-              where you can improve.
+            <p
+              style={
+                styles.overviewText
+              }
+            >
+              Review each response below
+              to understand what you did
+              well and where you can
+              improve.
             </p>
           </div>
 
-          <div style={styles.summaryNumber}>
+          <div
+            style={
+              styles.summaryNumber
+            }
+          >
             <strong
-              style={styles.summaryNumberStrong}
+              style={
+                styles.summaryNumberStrong
+              }
             >
               {feedbackItems.length}
             </strong>
 
-            <span>
-              Questions
-            </span>
+            <span>Questions</span>
           </div>
         </div>
-
-        {/* QUESTION FEEDBACK */}
 
         <div style={styles.sectionHeader}>
           <div>
@@ -535,24 +682,35 @@ function Feedback() {
                   item.question_id ||
                   index
                 }
-                style={styles.feedbackCard}
+                style={
+                  styles.feedbackCard
+                }
               >
-
-                {/* QUESTION */}
-
-                <div style={styles.questionTop}>
+                <div
+                  style={
+                    styles.questionTop
+                  }
+                >
                   <div>
                     <span
-                      style={styles.questionNumber}
+                      style={
+                        styles.questionNumber
+                      }
                     >
                       QUESTION{" "}
-                      {String(index + 1).padStart(
+                      {String(
+                        index + 1
+                      ).padStart(
                         2,
                         "0"
                       )}
                     </span>
 
-                    <h3 style={styles.question}>
+                    <h3
+                      style={
+                        styles.question
+                      }
+                    >
                       {item.question}
                     </h3>
                   </div>
@@ -576,29 +734,50 @@ function Feedback() {
                   </div>
                 </div>
 
-                {/* ANSWER */}
-
-                <div style={styles.answerBox}>
-                  <p style={styles.boxLabel}>
+                <div
+                  style={
+                    styles.answerBox
+                  }
+                >
+                  <p
+                    style={
+                      styles.boxLabel
+                    }
+                  >
                     YOUR ANSWER
                   </p>
 
-                  <p style={styles.answerText}>
+                  <p
+                    style={
+                      styles.answerText
+                    }
+                  >
                     {item.answer ||
                       "No answer provided."}
                   </p>
                 </div>
 
-                {/* STRENGTHS / IMPROVEMENTS */}
-
-                <div style={styles.feedbackGrid}>
-
-                  <div style={styles.feedbackSection}>
-                    <p style={styles.boxLabel}>
+                <div
+                  style={
+                    styles.feedbackGrid
+                  }
+                >
+                  <div
+                    style={
+                      styles.feedbackSection
+                    }
+                  >
+                    <p
+                      style={
+                        styles.boxLabel
+                      }
+                    >
                       WHAT YOU DID WELL
                     </p>
 
-                    <ul style={styles.list}>
+                    <ul
+                      style={styles.list}
+                    >
                       {(
                         feedback.strengths ||
                         []
@@ -608,8 +787,12 @@ function Feedback() {
                           strengthIndex
                         ) => (
                           <li
-                            key={strengthIndex}
-                            style={styles.listItem}
+                            key={
+                              strengthIndex
+                            }
+                            style={
+                              styles.listItem
+                            }
                           >
                             {strength}
                           </li>
@@ -618,12 +801,22 @@ function Feedback() {
                     </ul>
                   </div>
 
-                  <div style={styles.feedbackSection}>
-                    <p style={styles.boxLabel}>
+                  <div
+                    style={
+                      styles.feedbackSection
+                    }
+                  >
+                    <p
+                      style={
+                        styles.boxLabel
+                      }
+                    >
                       AREAS TO IMPROVE
                     </p>
 
-                    <ul style={styles.list}>
+                    <ul
+                      style={styles.list}
+                    >
                       {(
                         feedback.improvements ||
                         []
@@ -633,8 +826,12 @@ function Feedback() {
                           improvementIndex
                         ) => (
                           <li
-                            key={improvementIndex}
-                            style={styles.listItem}
+                            key={
+                              improvementIndex
+                            }
+                            style={
+                              styles.listItem
+                            }
                           >
                             {improvement}
                           </li>
@@ -644,72 +841,69 @@ function Feedback() {
                   </div>
                 </div>
 
-                {/* BETTER ANSWER */}
-
-                <div style={styles.betterAnswer}>
-                  <p style={styles.boxLabel}>
+                <div
+                  style={
+                    styles.betterAnswer
+                  }
+                >
+                  <p
+                    style={
+                      styles.boxLabel
+                    }
+                  >
                     SUGGESTED BETTER ANSWER
                   </p>
 
-                  <p style={styles.betterAnswerText}>
+                  <p
+                    style={
+                      styles.betterAnswerText
+                    }
+                  >
                     {feedback.better_answer ||
                       "No improved answer available."}
                   </p>
                 </div>
-
               </div>
             );
           }
         )}
 
-        {/* NAVIGATION */}
-
-        <div style={styles.navigation}>
+        <div
+          style={styles.navigation}
+        >
           <button
-            onClick={() =>
-              window.location.href = "/dashboard"
-            }
+            onClick={() => {
+              window.location.hash =
+                "#/dashboard";
+            }}
             style={styles.navButton}
           >
             ← Dashboard
           </button>
 
           <button
-            onClick={() =>
-              window.location.href = "/history"
+            onClick={() => {
+              window.location.hash =
+                "#/interview";
+            }}
+            style={
+              styles.primaryNavButton
             }
-            style={styles.navButton}
-          >
-            📋 History
-          </button>
-
-          <button
-            onClick={() =>
-              window.location.href = "/interview"
-            }
-            style={styles.primaryNavButton}
           >
             🎤 New Interview
           </button>
         </div>
 
-        {/* FOOTER */}
-
         <div style={styles.footer}>
           <p>
-            ✦ Feedback generated by
-            your AI interview evaluator
+            ✦ Feedback generated by your
+            AI interview evaluator
           </p>
         </div>
-
       </div>
     </div>
   );
 }
-
-// ==========================================
-// STYLES
-// ==========================================
 
 const styles = {
   page: {
@@ -979,8 +1173,7 @@ const styles = {
   },
 
   feedbackSection: {
-    borderTop:
-      "1px solid #E6DBCC",
+    borderTop: "1px solid #E6DBCC",
     paddingTop: "18px",
   },
 
@@ -997,11 +1190,9 @@ const styles = {
 
   betterAnswer: {
     background: "#EEE4D5",
-    borderLeft:
-      "4px solid #B89B7A",
+    borderLeft: "4px solid #B89B7A",
     padding: "20px",
-    borderRadius:
-      "0 16px 16px 0",
+    borderRadius: "0 16px 16px 0",
   },
 
   betterAnswerText: {
@@ -1021,8 +1212,7 @@ const styles = {
   },
 
   navButton: {
-    border:
-      "1px solid #D8C5AC",
+    border: "1px solid #D8C5AC",
     borderRadius: "12px",
     padding: "13px 22px",
     background: "#FBF8F2",
@@ -1047,8 +1237,7 @@ const styles = {
     textAlign: "center",
     color: "#9A8C7D",
     fontSize: "12px",
-    padding:
-      "30px 0 10px",
+    padding: "30px 0 10px",
   },
 
   loadingCard: {
@@ -1056,8 +1245,7 @@ const styles = {
     margin: "140px auto",
     padding: "50px 40px",
     background: "#FBF8F2",
-    border:
-      "1px solid #E1D5C5",
+    border: "1px solid #E1D5C5",
     borderRadius: "28px",
     textAlign: "center",
     boxShadow:
@@ -1069,8 +1257,7 @@ const styles = {
   aiIcon: {
     width: "65px",
     height: "65px",
-    margin:
-      "0 auto 25px",
+    margin: "0 auto 25px",
     borderRadius: "20px",
     background: "#493B30",
     color: "#D8C5AC",
@@ -1083,8 +1270,7 @@ const styles = {
   loadingTitle: {
     fontSize: "28px",
     color: "#493B30",
-    margin:
-      "0 0 15px",
+    margin: "0 0 15px",
   },
 
   loadingText: {
@@ -1097,15 +1283,13 @@ const styles = {
     height: "4px",
     borderRadius: "5px",
     background: "#B89B7A",
-    margin:
-      "30px auto 0",
+    margin: "30px auto 0",
   },
 
   errorIcon: {
     width: "55px",
     height: "55px",
-    margin:
-      "0 auto 20px",
+    margin: "0 auto 20px",
     borderRadius: "50%",
     background: "#EAD8D0",
     color: "#895B4A",

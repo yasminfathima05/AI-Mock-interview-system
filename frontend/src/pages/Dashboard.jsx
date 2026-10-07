@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -9,84 +8,6 @@ function Dashboard() {
     const savedUser = localStorage.getItem("user");
     return savedUser ? JSON.parse(savedUser) : null;
   });
-
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const token = localStorage.getItem("access_token");
-
-        if (!token) {
-          navigate("/login");
-          return;
-        }
-
-        const response = await api.get(
-          "/api/interview/history",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (response.data.success) {
-          setHistory(response.data.history || []);
-        }
-      } catch (error) {
-        console.error(
-          "Failed to load dashboard history:",
-          error
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHistory();
-  }, [navigate]);
-
-  // ==========================================
-  // CALCULATE STATS
-  // ==========================================
-
-  const completedInterviews = history.filter(
-    (item) => item.status === "completed"
-  );
-
-  const scoredInterviews = completedInterviews.filter(
-    (item) =>
-      item.overall_score !== null &&
-      item.overall_score !== undefined
-  );
-
-  const completedCount = completedInterviews.length;
-
-  const averageScore =
-    scoredInterviews.length > 0
-      ? Math.round(
-          scoredInterviews.reduce(
-            (total, item) =>
-              total + Number(item.overall_score),
-            0
-          ) / scoredInterviews.length
-        )
-      : null;
-
-  const latestScoredInterview =
-    scoredInterviews.length > 0
-      ? scoredInterviews[0]
-      : null;
-
-  const latestScore = latestScoredInterview
-    ? Number(latestScoredInterview.overall_score)
-    : null;
-
-  // ==========================================
-  // STYLES
-  // ==========================================
 
   const styles = {
     page: {
@@ -125,17 +46,6 @@ function Dashboard() {
       color: "#493B30",
     },
 
-    historyButton: {
-      border: "1px solid #D8C5AC",
-      background: "#FBF8F2",
-      color: "#493B30",
-      borderRadius: "12px",
-      padding: "13px 20px",
-      fontSize: "14px",
-      fontWeight: "600",
-      cursor: "pointer",
-    },
-
     main: {
       maxWidth: "1180px",
       margin: "0 auto",
@@ -148,8 +58,7 @@ function Dashboard() {
       borderRadius: "28px",
       padding: "55px 35px",
       textAlign: "center",
-      boxShadow:
-        "0 18px 50px rgba(73, 59, 48, 0.09)",
+      boxShadow: "0 18px 50px rgba(73, 59, 48, 0.09)",
     },
 
     welcomeSmall: {
@@ -185,8 +94,7 @@ function Dashboard() {
       fontSize: "16px",
       fontWeight: "600",
       cursor: "pointer",
-      boxShadow:
-        "0 8px 20px rgba(73, 59, 48, 0.18)",
+      boxShadow: "0 8px 20px rgba(73, 59, 48, 0.18)",
     },
 
     hrButton: {
@@ -203,8 +111,7 @@ function Dashboard() {
 
     statsGrid: {
       display: "grid",
-      gridTemplateColumns:
-        "repeat(3, minmax(0, 1fr))",
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
       gap: "18px",
       marginTop: "22px",
     },
@@ -215,8 +122,7 @@ function Dashboard() {
       borderRadius: "22px",
       padding: "28px 20px",
       textAlign: "center",
-      boxShadow:
-        "0 10px 30px rgba(73, 59, 48, 0.06)",
+      boxShadow: "0 10px 30px rgba(73, 59, 48, 0.06)",
     },
 
     statLabel: {
@@ -240,8 +146,7 @@ function Dashboard() {
       border: "1px solid #E1D5C5",
       borderRadius: "28px",
       padding: "32px",
-      boxShadow:
-        "0 10px 30px rgba(73, 59, 48, 0.06)",
+      boxShadow: "0 10px 30px rgba(73, 59, 48, 0.06)",
     },
 
     actionsTitle: {
@@ -254,8 +159,7 @@ function Dashboard() {
 
     actionsGrid: {
       display: "grid",
-      gridTemplateColumns:
-        "repeat(3, minmax(0, 1fr))",
+      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
       gap: "16px",
     },
 
@@ -291,34 +195,15 @@ function Dashboard() {
 
   return (
     <div style={styles.page}>
-
-      {/* NAVBAR */}
-
       <nav style={styles.navbar}>
         <div>
-          <p style={styles.brand}>
-            AI Mock Interview
-          </p>
+          <p style={styles.brand}>AI Mock Interview</p>
 
-          <h1 style={styles.heading}>
-            Dashboard
-          </h1>
+          <h1 style={styles.heading}>Dashboard</h1>
         </div>
-
-        <button
-          onClick={() => navigate("/history")}
-          style={styles.historyButton}
-        >
-          Interview History →
-        </button>
       </nav>
 
-      {/* MAIN */}
-
       <main style={styles.main}>
-
-        {/* WELCOME */}
-
         <section style={styles.welcomeCard}>
           <p style={styles.welcomeSmall}>
             Welcome back 👋
@@ -333,16 +218,12 @@ function Dashboard() {
             more confident in your interviews?
           </p>
 
-          {/* TECHNICAL ROUND */}
-
           <button
             onClick={() => navigate("/interview")}
             style={styles.startButton}
           >
             🎯 Start Technical Interview →
           </button>
-
-          {/* HR ROUND */}
 
           <br />
 
@@ -354,17 +235,14 @@ function Dashboard() {
           </button>
         </section>
 
-        {/* STATS */}
-
         <section style={styles.statsGrid}>
-
           <div style={styles.statCard}>
             <p style={styles.statLabel}>
               Interviews Completed
             </p>
 
             <div style={styles.statNumber}>
-              {loading ? "..." : completedCount}
+              —
             </div>
           </div>
 
@@ -374,11 +252,7 @@ function Dashboard() {
             </p>
 
             <div style={styles.statNumber}>
-              {loading
-                ? "..."
-                : averageScore !== null
-                ? `${averageScore}/100`
-                : "N/A"}
+              —
             </div>
           </div>
 
@@ -388,48 +262,17 @@ function Dashboard() {
             </p>
 
             <div style={styles.statNumber}>
-              {loading
-                ? "..."
-                : latestScore !== null
-                ? `${latestScore}/100`
-                : "N/A"}
+              —
             </div>
           </div>
-
         </section>
 
-        {/* QUICK ACTIONS */}
-
         <section style={styles.actionsSection}>
-
           <h2 style={styles.actionsTitle}>
             Quick Actions
           </h2>
 
           <div style={styles.actionsGrid}>
-
-            {/* HISTORY */}
-
-            <button
-              onClick={() => navigate("/history")}
-              style={styles.actionCard}
-            >
-              <div style={styles.icon}>
-                📜
-              </div>
-
-              <h3 style={styles.actionTitle}>
-                Interview History
-              </h3>
-
-              <p style={styles.actionText}>
-                Review your previous interviews,
-                scores and performance.
-              </p>
-            </button>
-
-            {/* AI ASSISTANT */}
-
             <button
               onClick={() => navigate("/assistant")}
               style={styles.actionCard}
@@ -448,8 +291,6 @@ function Dashboard() {
               </p>
             </button>
 
-            {/* PROFILE */}
-
             <button
               onClick={() => navigate("/profile")}
               style={styles.actionCard}
@@ -467,11 +308,8 @@ function Dashboard() {
                 information.
               </p>
             </button>
-
           </div>
-
         </section>
-
       </main>
     </div>
   );

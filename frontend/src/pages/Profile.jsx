@@ -32,24 +32,13 @@ const Profile = () => {
 
       if (storedUser) {
         setUser(storedUser);
-        setEmail(storedUser.email || "");
-        setUserId(storedUser.id || "");
-      }
-
-      const response = await api.get("/api/interview/history", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      // Keep the stored login information as the main profile source.
-      // The request above also confirms that the session is still valid.
-      if (response.data && storedUser) {
         setName(
           storedUser.name ||
-          localStorage.getItem("user_name") ||
-          ""
+            localStorage.getItem("user_name") ||
+            ""
         );
+        setEmail(storedUser.email || "");
+        setUserId(storedUser.id || "");
       }
     } catch (error) {
       console.error("Profile loading error:", error);
@@ -108,7 +97,10 @@ const Profile = () => {
           JSON.stringify(updatedUser)
         );
 
-        localStorage.setItem("user_name", name.trim());
+        localStorage.setItem(
+          "user_name",
+          name.trim()
+        );
 
         setUser(updatedUser);
         setMessage("Profile updated successfully! ✓");
@@ -170,7 +162,6 @@ const Profile = () => {
           margin: "0 auto",
         }}
       >
-        {/* Back button */}
         <button
           onClick={() => navigate("/dashboard")}
           style={{
@@ -186,7 +177,6 @@ const Profile = () => {
           ← Back to Dashboard
         </button>
 
-        {/* Header */}
         <div style={{ marginBottom: "30px" }}>
           <p
             style={{
@@ -222,17 +212,16 @@ const Profile = () => {
           </p>
         </div>
 
-        {/* Profile card */}
         <div
           style={{
             background: "#FBF8F2",
             border: "1px solid #E1D5C5",
             borderRadius: "24px",
             padding: "32px",
-            boxShadow: "0 15px 40px rgba(73, 59, 48, 0.08)",
+            boxShadow:
+              "0 15px 40px rgba(73, 59, 48, 0.08)",
           }}
         >
-          {/* Avatar */}
           <div
             style={{
               display: "flex",
@@ -284,7 +273,6 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Name */}
           <div style={{ marginBottom: "22px" }}>
             <label
               style={{
@@ -300,7 +288,9 @@ const Profile = () => {
 
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) =>
+                setName(e.target.value)
+              }
               placeholder="Enter your name"
               style={{
                 width: "100%",
@@ -316,7 +306,6 @@ const Profile = () => {
             />
           </div>
 
-          {/* Email */}
           <div style={{ marginBottom: "22px" }}>
             <label
               style={{
@@ -356,7 +345,6 @@ const Profile = () => {
             </p>
           </div>
 
-          {/* User ID */}
           <div style={{ marginBottom: "28px" }}>
             <label
               style={{
@@ -385,7 +373,6 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Message */}
           {message && (
             <div
               style={{
@@ -401,7 +388,6 @@ const Profile = () => {
             </div>
           )}
 
-          {/* Buttons */}
           <div
             style={{
               display: "flex",
@@ -420,11 +406,15 @@ const Profile = () => {
                 color: "#FBF8F2",
                 fontSize: "14px",
                 fontWeight: "600",
-                cursor: saving ? "not-allowed" : "pointer",
+                cursor: saving
+                  ? "not-allowed"
+                  : "pointer",
                 opacity: saving ? 0.7 : 1,
               }}
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {saving
+                ? "Saving..."
+                : "Save Changes"}
             </button>
 
             <button
@@ -445,7 +435,6 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Bottom navigation */}
         <div
           style={{
             display: "flex",
@@ -466,19 +455,6 @@ const Profile = () => {
             }}
           >
             Dashboard
-          </button>
-
-          <button
-            onClick={() => navigate("/history")}
-            style={{
-              border: "none",
-              background: "transparent",
-              color: "#7D7063",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
-          >
-            History
           </button>
 
           <button

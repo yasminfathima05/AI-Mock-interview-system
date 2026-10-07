@@ -1,14 +1,13 @@
 import { useState } from "react";
 import api from "../services/api";
 
-function HRInterview() {
+function Interview() {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [sessionId, setSessionId] = useState(null);
 
   const [interviewStarted, setInterviewStarted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -18,7 +17,7 @@ function HRInterview() {
   const [speechSupported, setSpeechSupported] = useState(true);
 
   // ==============================
-  // START HR INTERVIEW
+  // START TECHNICAL INTERVIEW
   // ==============================
 
   const startInterview = async () => {
@@ -33,10 +32,11 @@ function HRInterview() {
         return;
       }
 
+      // Create TECHNICAL session
       const sessionResponse = await api.post(
         "/api/interview/session",
         {
-          interview_type: "hr",
+          interview_type: "technical",
         },
         {
           headers: {
@@ -46,25 +46,25 @@ function HRInterview() {
       );
 
       if (!sessionResponse.data.success) {
-        setError("Failed to create HR interview session.");
+        setError("Failed to create technical interview session.");
         return;
       }
 
-      const newSessionId =
-        sessionResponse.data.session.id;
+      const newSessionId = sessionResponse.data.session.id;
 
       setSessionId(newSessionId);
 
+      // Load TECHNICAL questions
       const questionResponse = await api.post(
         "/api/interview/start",
         {
           count: 20,
-          round: "hr",
+          round: "technical",
         }
       );
 
       if (!questionResponse.data.success) {
-        setError("Failed to load HR interview questions.");
+        setError("Failed to load technical interview questions.");
         return;
       }
 
@@ -74,14 +74,11 @@ function HRInterview() {
       setInterviewStarted(true);
 
     } catch (error) {
-      console.error(
-        "HR interview start error:",
-        error
-      );
+      console.error("Technical interview start error:", error);
 
       setError(
         error.response?.data?.message ||
-          "Something went wrong while starting the HR interview."
+          "Something went wrong while starting the technical interview."
       );
     } finally {
       setLoading(false);
@@ -167,16 +164,14 @@ function HRInterview() {
   // ==============================
 
   const saveCurrentAnswer = async () => {
-    const token =
-      localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token");
 
     if (!token) {
       setError("You are not logged in.");
       return false;
     }
 
-    const currentQuestion =
-      questions[currentIndex];
+    const currentQuestion = questions[currentIndex];
 
     const currentAnswer =
       answers[currentQuestion.id] || "";
@@ -207,7 +202,7 @@ function HRInterview() {
 
     } catch (error) {
       console.error(
-        "HR answer save error:",
+        "Technical answer save error:",
         error
       );
 
@@ -264,8 +259,7 @@ function HRInterview() {
         return;
       }
 
-      const token =
-        localStorage.getItem("access_token");
+      const token = localStorage.getItem("access_token");
 
       const response = await api.put(
         `/api/interview/session/${sessionId}/finish`,
@@ -279,7 +273,7 @@ function HRInterview() {
 
       if (!response.data.success) {
         setError(
-          "Failed to finish the HR interview."
+          "Failed to finish the technical interview."
         );
         return;
       }
@@ -290,20 +284,21 @@ function HRInterview() {
       );
 
       alert(
-        "HR Round completed successfully! 🎉"
+        "Technical Interview completed successfully! 🎉"
       );
 
-      window.location.href = "/feedback";
+      // HashRouter navigation
+      window.location.hash = "#/feedback";
 
     } catch (error) {
       console.error(
-        "HR interview finish error:",
+        "Technical interview finish error:",
         error
       );
 
       setError(
         error.response?.data?.message ||
-          "Something went wrong while finishing the HR interview."
+          "Something went wrong while finishing the technical interview."
       );
 
     } finally {
@@ -541,7 +536,7 @@ function HRInterview() {
             </p>
 
             <h1 style={styles.brandTitle}>
-              HR Round
+              Technical Interview
             </h1>
           </div>
 
@@ -551,9 +546,8 @@ function HRInterview() {
               ...styles.centerCard,
             }}
           >
-
             <div style={{ fontSize: "48px" }}>
-              💼
+              🎯
             </div>
 
             <h2
@@ -564,12 +558,13 @@ function HRInterview() {
                 fontWeight: "600",
               }}
             >
-              HR Interview
+              Technical Round
             </h2>
 
             <p style={styles.subtitle}>
-              Practice common HR and behavioural
-              interview questions with AI feedback.
+              Practice technical interview questions
+              covering programming, databases, APIs,
+              and core IT concepts.
             </p>
 
             <p
@@ -579,8 +574,7 @@ function HRInterview() {
                 marginBottom: "28px",
               }}
             >
-              <strong>20 questions</strong> ·
-              Voice input · AI feedback
+              <strong>20 questions</strong> · Voice input · AI feedback
             </p>
 
             {error && (
@@ -593,9 +587,8 @@ function HRInterview() {
               onClick={startInterview}
               style={styles.primaryButton}
             >
-              Start HR Round →
+              Start Technical Interview →
             </button>
-
           </div>
         </div>
       </div>
@@ -627,11 +620,11 @@ function HRInterview() {
                 margin: "20px 0 10px",
               }}
             >
-              Starting HR Round...
+              Starting Technical Interview...
             </h1>
 
             <p style={styles.subtitle}>
-              Preparing your 20 HR questions...
+              Preparing your technical questions...
             </p>
           </div>
         </div>
@@ -664,7 +657,7 @@ function HRInterview() {
                 margin: "20px 0 10px",
               }}
             >
-              HR Round Error
+              Technical Interview Error
             </h1>
 
             <p style={styles.subtitle}>
@@ -707,11 +700,11 @@ function HRInterview() {
                 fontSize: "30px",
               }}
             >
-              No HR Questions Available
+              No Technical Questions Available
             </h1>
 
             <p style={styles.subtitle}>
-              HR questions are not available right now.
+              Technical questions are not available right now.
             </p>
           </div>
         </div>
@@ -719,8 +712,7 @@ function HRInterview() {
     );
   }
 
-  const currentQuestion =
-    questions[currentIndex];
+  const currentQuestion = questions[currentIndex];
 
   const progress =
     ((currentIndex + 1) / questions.length) * 100;
@@ -731,34 +723,29 @@ function HRInterview() {
 
   return (
     <div style={styles.page}>
-
       <div style={styles.wrapper}>
 
         <div style={styles.brand}>
-
           <p style={styles.brandSmall}>
             AI Mock Interview
           </p>
 
           <h1 style={styles.brandTitle}>
-            HR Round
+            Technical Interview
           </h1>
-
         </div>
 
         <div style={styles.card}>
 
           <div style={styles.progressTop}>
-
             <p style={styles.questionNumber}>
-              HR Question {currentIndex + 1} /{" "}
+              Technical Question {currentIndex + 1} /{" "}
               {questions.length}
             </p>
 
             <p style={styles.sessionText}>
               Session #{sessionId}
             </p>
-
           </div>
 
           <div style={styles.progressBar}>
@@ -781,16 +768,13 @@ function HRInterview() {
           </h2>
 
           <textarea
-            value={
-              answers[currentQuestion.id] || ""
-            }
+            value={answers[currentQuestion.id] || ""}
             onChange={handleAnswerChange}
-            placeholder="Type your answer here..."
+            placeholder="Type your technical answer here..."
             style={styles.textarea}
           />
 
           <div style={styles.voiceRow}>
-
             <button
               onClick={startVoiceInput}
               disabled={
@@ -816,10 +800,8 @@ function HRInterview() {
             </button>
 
             <span style={styles.voiceInfo}>
-              Speak your answer and edit the
-              transcript if needed.
+              Speak your answer and edit the transcript if needed.
             </span>
-
           </div>
 
           {!speechSupported && (
@@ -829,8 +811,7 @@ function HRInterview() {
                 marginTop: "15px",
               }}
             >
-              Voice input is not supported in this
-              browser.
+              Voice input is not supported in this browser.
             </div>
           )}
 
@@ -857,8 +838,7 @@ function HRInterview() {
               ← Previous
             </button>
 
-            {currentIndex <
-            questions.length - 1 ? (
+            {currentIndex < questions.length - 1 ? (
               <button
                 onClick={handleNext}
                 disabled={
@@ -875,9 +855,7 @@ function HRInterview() {
                     : {}),
                 }}
               >
-                {saving
-                  ? "Saving..."
-                  : "Next →"}
+                {saving ? "Saving..." : "Next →"}
               </button>
             ) : (
               <button
@@ -898,18 +876,16 @@ function HRInterview() {
               >
                 {finishing
                   ? "Finishing..."
-                  : "Finish HR Round ✓"}
+                  : "Finish Technical Interview ✓"}
               </button>
             )}
 
           </div>
 
         </div>
-
       </div>
-
     </div>
   );
 }
 
-export default HRInterview;
+export default Interview;

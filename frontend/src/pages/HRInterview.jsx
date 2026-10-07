@@ -294,7 +294,7 @@ function HRInterview() {
         "HR Round completed successfully! 🎉"
       );
 
-      window.location.href = "/feedback";
+      window.location.hash = "#/feedback";
 
     } catch (error) {
       console.error(
