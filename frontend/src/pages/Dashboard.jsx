@@ -189,6 +189,18 @@ function Dashboard() {
         "0 8px 20px rgba(73, 59, 48, 0.18)",
     },
 
+    hrButton: {
+      marginTop: "14px",
+      border: "1px solid #D8C5AC",
+      background: "#FBF8F2",
+      color: "#493B30",
+      borderRadius: "13px",
+      padding: "14px 28px",
+      fontSize: "15px",
+      fontWeight: "600",
+      cursor: "pointer",
+    },
+
     statsGrid: {
       display: "grid",
       gridTemplateColumns:
@@ -321,11 +333,24 @@ function Dashboard() {
             more confident in your interviews?
           </p>
 
+          {/* TECHNICAL ROUND */}
+
           <button
             onClick={() => navigate("/interview")}
             style={styles.startButton}
           >
-            🎯 Start New Interview
+            🎯 Start Technical Interview →
+          </button>
+
+          {/* HR ROUND */}
+
+          <br />
+
+          <button
+            onClick={() => navigate("/hr-interview")}
+            style={styles.hrButton}
+          >
+            👔 Start HR Round — 20 Questions
           </button>
         </section>
 

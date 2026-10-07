@@ -33,6 +33,7 @@ function HRInterview() {
         return;
       }
 
+      // Create HR session
       const sessionResponse = await api.post(
         "/api/interview/session",
         {
@@ -46,7 +47,7 @@ function HRInterview() {
       );
 
       if (!sessionResponse.data.success) {
-        setError("Failed to create HR interview session.");
+        setError("Failed to create HR session.");
         return;
       }
 
@@ -55,6 +56,7 @@ function HRInterview() {
 
       setSessionId(newSessionId);
 
+      // Get exactly 20 HR questions
       const questionResponse = await api.post(
         "/api/interview/start",
         {
@@ -64,7 +66,7 @@ function HRInterview() {
       );
 
       if (!questionResponse.data.success) {
-        setError("Failed to load HR interview questions.");
+        setError("Failed to load HR questions.");
         return;
       }
 
@@ -81,7 +83,7 @@ function HRInterview() {
 
       setError(
         error.response?.data?.message ||
-          "Something went wrong while starting the HR interview."
+          "Something went wrong while starting the HR round."
       );
     } finally {
       setLoading(false);
@@ -167,8 +169,7 @@ function HRInterview() {
   // ==============================
 
   const saveCurrentAnswer = async () => {
-    const token =
-      localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token");
 
     if (!token) {
       setError("You are not logged in.");
@@ -279,7 +280,7 @@ function HRInterview() {
 
       if (!response.data.success) {
         setError(
-          "Failed to finish the HR interview."
+          "Failed to finish the HR round."
         );
         return;
       }
@@ -303,7 +304,7 @@ function HRInterview() {
 
       setError(
         error.response?.data?.message ||
-          "Something went wrong while finishing the HR interview."
+          "Something went wrong while finishing the HR round."
       );
 
     } finally {
@@ -551,9 +552,8 @@ function HRInterview() {
               ...styles.centerCard,
             }}
           >
-
-            <div style={{ fontSize: "48px" }}>
-              💼
+            <div style={{ fontSize: "50px" }}>
+              👔
             </div>
 
             <h2
@@ -564,19 +564,20 @@ function HRInterview() {
                 fontWeight: "600",
               }}
             >
-              HR Interview
+              HR Interview Practice
             </h2>
 
             <p style={styles.subtitle}>
               Practice common HR and behavioural
-              interview questions with AI feedback.
+              interview questions with AI-powered
+              feedback.
             </p>
 
             <p
               style={{
                 color: "#7D7063",
                 fontSize: "15px",
-                marginBottom: "28px",
+                marginBottom: "25px",
               }}
             >
               <strong>20 questions</strong> ·
@@ -595,8 +596,8 @@ function HRInterview() {
             >
               Start HR Round →
             </button>
-
           </div>
+
         </div>
       </div>
     );
@@ -711,7 +712,8 @@ function HRInterview() {
             </h1>
 
             <p style={styles.subtitle}>
-              HR questions are not available right now.
+              HR questions are not available right
+              now.
             </p>
           </div>
         </div>
@@ -731,11 +733,9 @@ function HRInterview() {
 
   return (
     <div style={styles.page}>
-
       <div style={styles.wrapper}>
 
         <div style={styles.brand}>
-
           <p style={styles.brandSmall}>
             AI Mock Interview
           </p>
@@ -743,13 +743,13 @@ function HRInterview() {
           <h1 style={styles.brandTitle}>
             HR Round
           </h1>
-
         </div>
 
         <div style={styles.card}>
 
-          <div style={styles.progressTop}>
+          {/* PROGRESS */}
 
+          <div style={styles.progressTop}>
             <p style={styles.questionNumber}>
               HR Question {currentIndex + 1} /{" "}
               {questions.length}
@@ -758,7 +758,6 @@ function HRInterview() {
             <p style={styles.sessionText}>
               Session #{sessionId}
             </p>
-
           </div>
 
           <div style={styles.progressBar}>
@@ -770,15 +769,21 @@ function HRInterview() {
             />
           </div>
 
+          {/* ERROR */}
+
           {error && (
             <div style={styles.error}>
               {error}
             </div>
           )}
 
+          {/* QUESTION */}
+
           <h2 style={styles.question}>
             {currentQuestion.questions}
           </h2>
+
+          {/* ANSWER */}
 
           <textarea
             value={
@@ -789,8 +794,9 @@ function HRInterview() {
             style={styles.textarea}
           />
 
-          <div style={styles.voiceRow}>
+          {/* VOICE */}
 
+          <div style={styles.voiceRow}>
             <button
               onClick={startVoiceInput}
               disabled={
@@ -819,7 +825,6 @@ function HRInterview() {
               Speak your answer and edit the
               transcript if needed.
             </span>
-
           </div>
 
           {!speechSupported && (
@@ -833,6 +838,8 @@ function HRInterview() {
               browser.
             </div>
           )}
+
+          {/* NAVIGATION */}
 
           <div style={styles.navigation}>
 
@@ -905,9 +912,7 @@ function HRInterview() {
           </div>
 
         </div>
-
       </div>
-
     </div>
   );
 }

@@ -275,9 +275,20 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.get("/api/interview/questions", async (req, res) => {
   try {
+    const round =
+      req.query.round || "technical";
+
+    if (!["technical", "hr"].includes(round)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid interview round."
+      });
+    }
+
     const { data, error } = await supabase
       .from("interview_questions")
-      .select("*");
+      .select("*")
+      .eq("round", round);
 
     if (error) {
       return res.status(500).json({
@@ -306,25 +317,55 @@ app.get("/api/interview/questions", async (req, res) => {
 
 app.post("/api/interview/start", async (req, res) => {
   try {
-    const count = Number(req.body.count) || 20;
+    const round =
+      req.body.round || "technical";
 
-    const allowedCounts = [20, 30, 40, 50];
+    let count =
+      Number(req.body.count) || 20;
 
-    if (!allowedCounts.includes(count)) {
+    if (!["technical", "hr"].includes(round)) {
       return res.status(400).json({
         success: false,
-        message: "Interview length must be 20, 30, 40 or 50."
+        message: "Invalid interview round."
+      });
+    }
+
+    // HR ROUND = ALWAYS 20 QUESTIONS
+    if (round === "hr") {
+      count = 20;
+    }
+
+    // TECHNICAL ROUND
+    const allowedCounts = [20, 30, 40, 50];
+
+    if (
+      round === "technical" &&
+      !allowedCounts.includes(count)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Interview length must be 20, 30, 40 or 50."
       });
     }
 
     const { data, error } = await supabase
       .from("interview_questions")
-      .select("*");
+      .select("*")
+      .eq("round", round);
 
     if (error) {
       return res.status(500).json({
         success: false,
         message: error.message
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message:
+          `No ${round} interview questions found.`
       });
     }
 
@@ -337,6 +378,7 @@ app.post("/api/interview/start", async (req, res) => {
 
     res.json({
       success: true,
+      round,
       questions: selectedQuestions
     });
 
@@ -380,6 +422,18 @@ app.post("/api/interview/session", async (req, res) => {
       });
     }
 
+    const interviewType =
+      req.body.interview_type || "technical";
+
+    if (
+      !["technical", "hr"].includes(interviewType)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid interview type."
+      });
+    }
+
     const userSupabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_KEY,
@@ -398,7 +452,8 @@ app.post("/api/interview/session", async (req, res) => {
         .from("interview_sessions")
         .insert({
           user_id: user.id,
-          status: "started"
+          status: "started",
+          interview_type: interviewType
         })
         .select()
         .single();
