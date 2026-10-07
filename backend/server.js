@@ -832,26 +832,41 @@ app.get("/api/interview/history", async (req, res) => {
 
     const history = [];
 
-    for (const session of sessions) {
-      const { data: answers } =
+    for (const session of sessions || []) {
+
+      const { data: answers, error: answersError } =
         await userSupabase
           .from("interview_answers")
-          .select("*")
+          .select("id")
           .eq("session_id", session.id);
 
-      const { data: feedback } =
+      if (answersError) {
+        console.error(
+          "History answers error:",
+          answersError.message
+        );
+      }
+
+      const { data: feedback, error: feedbackError } =
         await userSupabase
           .from("interview_feedback")
-          .select("*")
+          .select("id, score")
           .eq("session_id", session.id);
 
+      if (feedbackError) {
+        console.error(
+          "History feedback error:",
+          feedbackError.message
+        );
+      }
+
       const scores =
-        feedback
-          ?.map((item) => item.score)
+        (feedback || [])
+          .map((item) => Number(item.score))
           .filter(
             (score) =>
-              typeof score === "number"
-          ) || [];
+              Number.isFinite(score)
+          );
 
       const averageScore =
         scores.length > 0
@@ -865,11 +880,18 @@ app.get("/api/interview/history", async (req, res) => {
 
       history.push({
         ...session,
+
+        // Number of questions answered
         question_count:
           answers?.length || 0,
+
+        // Number of AI feedback records
         evaluated_count:
           feedback?.length || 0,
-        average_score:
+
+        // Overall average score
+        // This is the exact field History.jsx expects.
+        overall_score:
           averageScore
       });
     }
