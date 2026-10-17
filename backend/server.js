@@ -84,6 +84,43 @@ function parseGeminiJSON(text) {
 }
 
 
+function normalizeGeminiFeedback(value) {
+  const score = Number(value?.score);
+  const strengths = Array.isArray(value?.strengths)
+    ? value.strengths.filter(
+        (item) => typeof item === "string" && item.trim()
+      )
+    : [];
+  const improvements = Array.isArray(value?.improvements)
+    ? value.improvements.filter(
+        (item) => typeof item === "string" && item.trim()
+      )
+    : [];
+  const betterAnswer =
+    typeof value?.better_answer === "string"
+      ? value.better_answer.trim()
+      : "";
+
+  if (
+    !Number.isFinite(score) ||
+    score < 0 ||
+    score > 100 ||
+    strengths.length === 0 ||
+    improvements.length === 0 ||
+    !betterAnswer
+  ) {
+    throw new Error("Gemini returned incomplete interview feedback.");
+  }
+
+  return {
+    score: normalizeScore(score),
+    strengths: strengths.map((item) => item.trim()),
+    improvements: improvements.map((item) => item.trim()),
+    better_answer: betterAnswer
+  };
+}
+
+
 function normalizeScore(score) {
   const number = Number(score);
 
@@ -103,27 +140,57 @@ function normalizeScore(score) {
 // =====================================================
 
 async function generateGeminiFeedback(prompt) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured.");
+  }
+
   let lastError = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const result = await ai.models.generateContent({
-        model: "gemini-3.5-flash-lite",
-        contents: prompt
-      });
+  const models = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash"
+  ];
 
-      return result.text;
+  for (const [modelIndex, model] of models.entries()) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const result = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json"
+          }
+        });
 
-    } catch (error) {
-      lastError = error;
+        return result.text;
 
-      console.error(
-        `Gemini attempt ${attempt} failed:`,
-        error.message
-      );
+      } catch (error) {
+        lastError = error;
 
-      if (attempt < 3) {
-        await sleep(1500);
+        const status = Number(error.status);
+        const retryable =
+          status === 429 ||
+          (status >= 500 && status <= 599);
+        const modelUnavailable =
+          status === 404 &&
+          modelIndex < models.length - 1;
+
+        console.error(
+          `Gemini ${model} attempt ${attempt} failed:`,
+          error.status || error.code || error.name
+        );
+
+        if (!retryable && !modelUnavailable) {
+          throw error;
+        }
+
+        if (modelUnavailable) {
+          break;
+        }
+
+        if (retryable && attempt < 2) {
+          await sleep(1500 * attempt);
+        }
       }
     }
   }
@@ -883,9 +950,57 @@ app.get(
         });
       }
 
+      const latestAnswers = new Map();
+      for (const answer of data || []) {
+        latestAnswers.set(
+          String(answer.question_id),
+          answer
+        );
+      }
+
+      const uniqueAnswers = [...latestAnswers.values()];
+      if (uniqueAnswers.length === 0) {
+        return res.json({
+          success: true,
+          answers: []
+        });
+      }
+
+      const questionIds = [
+        ...new Set(
+          uniqueAnswers.map((answer) => answer.question_id)
+        )
+      ];
+
+      const {
+        data: questions,
+        error: questionsError
+      } = await supabase
+        .from("interview_questions")
+        .select("id, questions")
+        .in("id", questionIds);
+
+      if (questionsError) {
+        return res.status(500).json({
+          success: false,
+          message: questionsError.message
+        });
+      }
+
+      const questionById = new Map(
+        (questions || []).map((question) => [
+          String(question.id),
+          question.questions
+        ])
+      );
+
       res.json({
         success: true,
-        answers: data
+        answers: uniqueAnswers.map((answer) => ({
+          ...answer,
+          question:
+            questionById.get(String(answer.question_id)) || ""
+        }))
       });
 
     } catch (error) {
@@ -1273,10 +1388,7 @@ app.post(
           .limit(1);
 
       if (existingError) {
-        console.error(
-          "Existing feedback check error:",
-          existingError.message
-        );
+        throw existingError;
       }
 
       if (
@@ -1348,28 +1460,8 @@ Give a score from 0 to 100.
       const feedback =
         parseGeminiJSON(text);
 
-      feedback.score =
-        normalizeScore(
-          feedback.score
-        );
-
-      feedback.strengths =
-        Array.isArray(
-          feedback.strengths
-        )
-          ? feedback.strengths
-          : [];
-
-      feedback.improvements =
-        Array.isArray(
-          feedback.improvements
-        )
-          ? feedback.improvements
-          : [];
-
-      feedback.better_answer =
-        feedback.better_answer ||
-        "";
+      const normalizedFeedback =
+        normalizeGeminiFeedback(feedback);
 
       const { data, error } =
         await userSupabase
@@ -1378,17 +1470,17 @@ Give a score from 0 to 100.
             session_id,
             question_id,
             score:
-              feedback.score,
+              normalizedFeedback.score,
             strengths:
               JSON.stringify(
-                feedback.strengths
+                normalizedFeedback.strengths
               ),
             improvements:
               JSON.stringify(
-                feedback.improvements
+                normalizedFeedback.improvements
               ),
             better_answer:
-              feedback.better_answer
+              normalizedFeedback.better_answer
           })
           .select()
           .single();
@@ -1403,15 +1495,15 @@ Give a score from 0 to 100.
       res.json({
         success: true,
         feedback: {
-          ...feedback,
+          ...normalizedFeedback,
           id: data.id
         }
       });
 
     } catch (error) {
       console.error(
-        "AI feedback error:",
-        error
+        "AI feedback failed:",
+        error.status || error.code || error.name
       );
 
       res.status(500).json({
@@ -1522,16 +1614,34 @@ app.post(
       const results = [];
 
       for (const item of items) {
-        if (
-          !item.question_id ||
-          !item.question ||
-          !item.answer ||
-          !String(item.answer).trim()
-        ) {
-          continue;
-        }
+            if (!String(item.answer || "").trim()) {
+              results.push({
+                question_id: item.question_id,
+                unanswered: true,
+                score: 0,
+                strengths: [],
+                improvements: [],
+                better_answer: ""
+              });
+              continue;
+            }
 
-        try {
+            if (
+              !item.question_id ||
+              !String(item.question || "").trim()
+            ) {
+              results.push({
+                question_id: item.question_id,
+                evaluationFailed: true,
+                score: null,
+                strengths: [],
+                improvements: [],
+                better_answer: ""
+              });
+              continue;
+            }
+
+            try {
           /*
            * Check whether this question
            * already has feedback.
@@ -1558,10 +1668,7 @@ app.post(
               .limit(1);
 
           if (existingError) {
-            console.error(
-              "Existing batch feedback check error:",
-              existingError.message
-            );
+            throw existingError;
           }
 
           /*
@@ -1575,33 +1682,28 @@ app.post(
             const existing =
               existingFeedback[0];
 
-            results.push({
-              question_id:
-                item.question_id,
+            try {
+              const normalizedExisting =
+                normalizeGeminiFeedback({
+                  ...existing,
+                  strengths: parseFeedbackArray(
+                    existing.strengths
+                  ),
+                  improvements: parseFeedbackArray(
+                    existing.improvements
+                  )
+                });
 
-              score:
-                normalizeScore(
-                  existing.score
-                ),
+              results.push({
+                question_id: item.question_id,
+                ...normalizedExisting,
+                id: existing.id
+              });
 
-              strengths:
-                parseFeedbackArray(
-                  existing.strengths
-                ),
-
-              improvements:
-                parseFeedbackArray(
-                  existing.improvements
-                ),
-
-              better_answer:
-                existing.better_answer ||
-                "",
-
-              id: existing.id
-            });
-
-            continue;
+              continue;
+            } catch {
+              // Replace incomplete feedback from older evaluations below.
+            }
           }
 
           const prompt = `
@@ -1639,61 +1741,54 @@ Score from 0 to 100.
           const feedback =
             parseGeminiJSON(text);
 
-          feedback.score =
-            normalizeScore(
-              feedback.score
-            );
-
-          feedback.strengths =
-            Array.isArray(
-              feedback.strengths
-            )
-              ? feedback.strengths
-              : [];
-
-          feedback.improvements =
-            Array.isArray(
-              feedback.improvements
-            )
-              ? feedback.improvements
-              : [];
-
-          feedback.better_answer =
-            feedback.better_answer ||
-            "";
+          const normalizedFeedback =
+            normalizeGeminiFeedback(feedback);
 
           /*
            * Save feedback.
            */
 
-          const { data, error } =
-            await userSupabase
-              .from("interview_feedback")
-              .insert({
-                session_id,
-                question_id:
-                  item.question_id,
-                score:
-                  feedback.score,
-                strengths:
-                  JSON.stringify(
-                    feedback.strengths
-                  ),
-                improvements:
-                  JSON.stringify(
-                    feedback.improvements
-                  ),
-                better_answer:
-                  feedback.better_answer
-              })
-              .select()
-              .single();
+          const feedbackRow = {
+            session_id,
+            question_id: item.question_id,
+            score: normalizedFeedback.score,
+            strengths: JSON.stringify(
+              normalizedFeedback.strengths
+            ),
+            improvements: JSON.stringify(
+              normalizedFeedback.improvements
+            ),
+            better_answer: normalizedFeedback.better_answer
+          };
+
+          const feedbackQuery =
+            existingFeedback?.length > 0
+              ? userSupabase
+                  .from("interview_feedback")
+                  .update(feedbackRow)
+                  .eq("id", existingFeedback[0].id)
+              : userSupabase
+                  .from("interview_feedback")
+                  .insert(feedbackRow);
+
+          const { data, error } = await feedbackQuery
+            .select()
+            .single();
 
           if (error) {
             console.error(
               "Feedback database error:",
               error.message
             );
+
+            results.push({
+              question_id: item.question_id,
+              evaluationFailed: true,
+              score: null,
+              strengths: [],
+              improvements: [],
+              better_answer: ""
+            });
 
             continue;
           }
@@ -1702,16 +1797,25 @@ Score from 0 to 100.
             question_id:
               item.question_id,
 
-            ...feedback,
+            ...normalizedFeedback,
 
             id: data.id
           });
 
         } catch (itemError) {
           console.error(
-            "Batch feedback item error:",
-            itemError.message
+            "Batch feedback item failed:",
+            itemError.status || itemError.code || itemError.name
           );
+
+          results.push({
+            question_id: item.question_id,
+            evaluationFailed: true,
+            score: null,
+            strengths: [],
+            improvements: [],
+            better_answer: ""
+          });
         }
 
         /*
@@ -1753,11 +1857,15 @@ Score from 0 to 100.
 // START SERVER
 // =====================================================
 
-const PORT =
-  process.env.PORT || 5000;
+if (require.main === module) {
+  const PORT =
+    process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(
-    `Server running on http://localhost:${PORT}`
-  );
-});
+  app.listen(PORT, () => {
+    console.log(
+      `Server running on http://localhost:${PORT}`
+    );
+  });
+}
+
+module.exports = app;
