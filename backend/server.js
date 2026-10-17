@@ -864,6 +864,145 @@ app.put(
 
 
 // =====================================================
+// DASHBOARD INTERVIEW STATISTICS
+// =====================================================
+
+app.get(
+  "/api/dashboard/stats",
+  async (req, res) => {
+    try {
+      const accessToken =
+        req.headers.authorization?.replace(
+          "Bearer ",
+          ""
+        );
+
+      if (!accessToken) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required."
+        });
+      }
+
+      const {
+        data: { user },
+        error: userError
+      } = await supabase.auth.getUser(accessToken);
+
+      if (userError || !user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid or expired session."
+        });
+      }
+
+      const userSupabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_KEY,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${accessToken}`
+            }
+          }
+        }
+      );
+
+      const {
+        data: sessions,
+        error: sessionsError
+      } = await userSupabase
+        .from("interview_sessions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "completed");
+
+      if (sessionsError) {
+        return res.status(500).json({
+          success: false,
+          message: sessionsError.message
+        });
+      }
+
+      const completedSessions = sessions || [];
+      if (completedSessions.length === 0) {
+        return res.json({
+          success: true,
+          statistics: {
+            completedInterviews: 0,
+            averageScore: null,
+            latestScore: null
+          }
+        });
+      }
+
+      const sessionIds = completedSessions.map(
+        (session) => session.id
+      );
+      const {
+        data: feedback,
+        error: feedbackError
+      } = await userSupabase
+        .from("interview_feedback")
+        .select("session_id, score")
+        .in("session_id", sessionIds);
+
+      if (feedbackError) {
+        return res.status(500).json({
+          success: false,
+          message: feedbackError.message
+        });
+      }
+
+      const scoresBySession = new Map();
+      for (const item of feedback || []) {
+        if (
+          typeof item.score !== "number" ||
+          !Number.isFinite(item.score) ||
+          item.score < 0 ||
+          item.score > 100
+        ) {
+          continue;
+        }
+
+        const scores =
+          scoresBySession.get(String(item.session_id)) || [];
+        scores.push(item.score);
+        scoresBySession.set(String(item.session_id), scores);
+      }
+
+      const interviewAverages = [...scoresBySession.values()].map(
+        (scores) =>
+          scores.reduce((sum, score) => sum + score, 0) /
+          scores.length
+      );
+
+      res.json({
+        success: true,
+        statistics: {
+          completedInterviews: completedSessions.length,
+          averageScore: interviewAverages.length
+            ? Math.round(
+                interviewAverages.reduce(
+                  (sum, score) => sum + score,
+                  0
+                ) / interviewAverages.length
+              )
+            : null,
+          latestScore: null
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+);
+
+
+// =====================================================
 // GET SESSION ANSWERS
 // =====================================================
 

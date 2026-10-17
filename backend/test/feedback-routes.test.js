@@ -9,6 +9,7 @@ const {
 const state = {
   answers: [],
   feedback: [],
+  sessions: [],
   generatedRequests: [],
   failPrimaryModel: false,
   failAllModels: false,
@@ -16,9 +17,6 @@ const state = {
 };
 
 const tables = {
-  interview_sessions: [
-    { id: 7, user_id: "test-user" }
-  ],
   interview_questions: [
     { id: 101, questions: "How do you design a reliable API?" },
     { id: 102, questions: "How do you handle service failures?" }
@@ -47,7 +45,11 @@ class QueryBuilder {
     return this;
   }
 
-  order() {
+  order(field, options = {}) {
+    this.orderBy = {
+      field,
+      ascending: options.ascending !== false
+    };
     return this;
   }
 
@@ -93,15 +95,29 @@ class QueryBuilder {
         ? state.answers
         : this.table === "interview_feedback"
           ? state.feedback
-          : tables[this.table] || [];
+          : this.table === "interview_sessions"
+            ? state.sessions
+            : tables[this.table] || [];
 
-    const data = source.filter((row) =>
+    let data = source.filter((row) =>
       Object.entries(this.filters).every(([field, value]) =>
         Array.isArray(value)
           ? value.includes(row[field])
           : String(row[field]) === String(value)
       )
     );
+
+    if (this.orderBy) {
+      data = [...data].sort((left, right) => {
+        const comparison =
+          left[this.orderBy.field] < right[this.orderBy.field]
+            ? -1
+            : left[this.orderBy.field] > right[this.orderBy.field]
+              ? 1
+              : 0;
+        return this.orderBy.ascending ? comparison : -comparison;
+      });
+    }
 
     return { data, error: null };
   }
@@ -202,6 +218,12 @@ after(async () => {
 });
 
 beforeEach(() => {
+  state.sessions = [
+    { id: 7, user_id: "test-user", status: "completed" },
+    { id: 8, user_id: "test-user", status: "completed" },
+    { id: 9, user_id: "test-user", status: "started" },
+    { id: 10, user_id: "another-user", status: "completed" }
+  ];
   state.answers = [
     { id: 1, session_id: 7, question_id: 101, answer: "An earlier answer." },
     { id: 2, session_id: 7, question_id: 101, answer: "The latest answer." },
@@ -212,6 +234,76 @@ beforeEach(() => {
   state.failPrimaryModel = false;
   state.failAllModels = false;
   state.geminiResponse = null;
+});
+
+test("dashboard statistics average scored interviews equally and leave latest score unavailable", async () => {
+  state.feedback = [
+    { id: 1, session_id: 7, score: 80 },
+    { id: 2, session_id: 7, score: 100 },
+    { id: 3, session_id: 7, score: null },
+    { id: 4, session_id: 7, score: 101 },
+    { id: 5, session_id: 8, score: 70 },
+    { id: 6, session_id: 9, score: 100 },
+    { id: 7, session_id: 10, score: 10 }
+  ];
+
+  const response = await fetch(
+    `${baseUrl}/api/dashboard/stats`,
+    { headers: { Authorization: "******" } }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.statistics, {
+    completedInterviews: 2,
+    averageScore: 80,
+    latestScore: null
+  });
+});
+
+test("dashboard statistics leave scores unavailable when no feedback is saved", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/dashboard/stats`,
+    { headers: { Authorization: "******" } }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.statistics, {
+    completedInterviews: 2,
+    averageScore: null,
+    latestScore: null
+  });
+});
+
+test("dashboard statistics require authentication", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/dashboard/stats`
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(body.success, false);
+});
+
+test("dashboard statistics safely return empty values when there are no completed sessions", async () => {
+  state.sessions = [];
+  state.feedback = [
+    { id: 1, session_id: 7, score: 80 }
+  ];
+
+  const response = await fetch(
+    `${baseUrl}/api/dashboard/stats`,
+    { headers: { Authorization: "******" } }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.statistics, {
+    completedInterviews: 0,
+    averageScore: null,
+    latestScore: null
+  });
 });
 
 test("answers include original question text and only the latest saved response", async () => {

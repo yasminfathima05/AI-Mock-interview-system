@@ -1,13 +1,55 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../services/api";
 
 function Dashboard() {
   const navigate = useNavigate();
+  const [statistics, setStatistics] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState("");
 
   const [user] = useState(() => {
     const savedUser = localStorage.getItem("user");
     return savedUser ? JSON.parse(savedUser) : null;
   });
+
+  useEffect(() => {
+    const loadStatistics = async () => {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        setStatsError("Log in to view your interview statistics.");
+        setStatsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await api.get("/api/dashboard/stats", {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (!response.data.success || !response.data.statistics) {
+          throw new Error(
+            response.data.message ||
+              "Could not load interview statistics."
+          );
+        }
+
+        setStatistics(response.data.statistics);
+      } catch (error) {
+        setStatsError(
+          error.response?.data?.message ||
+            error.message ||
+            "Could not load interview statistics."
+        );
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadStatistics();
+  }, []);
 
   const styles = {
     page: {
@@ -242,7 +284,11 @@ function Dashboard() {
             </p>
 
             <div style={styles.statNumber}>
-              —
+              {statsLoading
+                ? "—"
+                : statsError
+                  ? "Unavailable"
+                  : statistics?.completedInterviews ?? 0}
             </div>
           </div>
 
@@ -252,7 +298,13 @@ function Dashboard() {
             </p>
 
             <div style={styles.statNumber}>
-              —
+              {statsLoading
+                ? "—"
+                : statsError
+                  ? "Unavailable"
+                  : statistics?.averageScore == null
+                    ? "—"
+                    : statistics.averageScore}
             </div>
           </div>
 
@@ -262,10 +314,22 @@ function Dashboard() {
             </p>
 
             <div style={styles.statNumber}>
-              —
+              {statsLoading
+                ? "—"
+                : statsError
+                  ? "Unavailable"
+                  : statistics?.latestScore == null
+                    ? "—"
+                    : statistics.latestScore}
             </div>
           </div>
         </section>
+
+        {statsError && (
+          <p role="alert" style={{ textAlign: "center" }}>
+            {statsError}
+          </p>
+        )}
 
         <section style={styles.actionsSection}>
           <h2 style={styles.actionsTitle}>
