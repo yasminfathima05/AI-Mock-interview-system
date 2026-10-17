@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
@@ -16,34 +17,18 @@ function Dashboard() {
   useEffect(() => {
     const loadStatistics = async () => {
       const token = localStorage.getItem("access_token");
+
       if (!token) {
         setStatsError("Log in to view your interview statistics.");
         setStatsLoading(false);
         return;
       }
 
-      console.info("Dashboard statistics request started.", {
-        endpoint: "/api/dashboard/stats"
-      });
-
       try {
         const response = await api.get("/api/dashboard/stats", {
           headers: {
             Authorization: `Bearer ${token}`
           }
-        });
-
-        console.info("Dashboard statistics response received.", {
-          status: response.status,
-          success: response.data?.success === true,
-          hasStatistics: Boolean(response.data?.statistics),
-          hasCompletedInterviewCount: Number.isFinite(
-            response.data?.statistics?.completedInterviews
-          ),
-          hasAverageScore:
-            typeof response.data?.statistics?.averageScore === "number",
-          hasLatestScore:
-            typeof response.data?.statistics?.latestScore === "number"
         });
 
         if (!response.data.success || !response.data.statistics) {
@@ -59,6 +44,7 @@ function Dashboard() {
           status: error.response?.status ?? null,
           code: error.code || "REQUEST_FAILED"
         });
+
         setStatsError(
           error.response?.data?.message ||
             error.message ||
@@ -174,7 +160,7 @@ function Dashboard() {
 
     statsGrid: {
       display: "grid",
-      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
       gap: "18px",
       marginTop: "22px",
     },
@@ -261,16 +247,13 @@ function Dashboard() {
       <nav style={styles.navbar}>
         <div>
           <p style={styles.brand}>AI Mock Interview</p>
-
           <h1 style={styles.heading}>Dashboard</h1>
         </div>
       </nav>
 
       <main style={styles.main}>
         <section style={styles.welcomeCard}>
-          <p style={styles.welcomeSmall}>
-            Welcome back 👋
-          </p>
+          <p style={styles.welcomeSmall}>Welcome back 👋</p>
 
           <h2 style={styles.email}>
             {user?.email || "User"}
@@ -314,9 +297,7 @@ function Dashboard() {
           </div>
 
           <div style={styles.statCard}>
-            <p style={styles.statLabel}>
-              Average Score
-            </p>
+            <p style={styles.statLabel}>Average Score</p>
 
             <div style={styles.statNumber}>
               {statsLoading
@@ -328,22 +309,6 @@ function Dashboard() {
                     : statistics.averageScore}
             </div>
           </div>
-
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>
-              Latest Score
-            </p>
-
-            <div style={styles.statNumber}>
-              {statsLoading
-                ? "—"
-                : statsError
-                  ? "Unavailable"
-                  : statistics?.latestScore == null
-                    ? "—"
-                    : statistics.latestScore}
-            </div>
-          </div>
         </section>
 
         {statsError && (
@@ -353,22 +318,16 @@ function Dashboard() {
         )}
 
         <section style={styles.actionsSection}>
-          <h2 style={styles.actionsTitle}>
-            Quick Actions
-          </h2>
+          <h2 style={styles.actionsTitle}>Quick Actions</h2>
 
           <div style={styles.actionsGrid}>
             <button
               onClick={() => navigate("/assistant")}
               style={styles.actionCard}
             >
-              <div style={styles.icon}>
-                🤖
-              </div>
+              <div style={styles.icon}>🤖</div>
 
-              <h3 style={styles.actionTitle}>
-                AI Assistant
-              </h3>
+              <h3 style={styles.actionTitle}>AI Assistant</h3>
 
               <p style={styles.actionText}>
                 Get help preparing for interviews
@@ -380,13 +339,9 @@ function Dashboard() {
               onClick={() => navigate("/profile")}
               style={styles.actionCard}
             >
-              <div style={styles.icon}>
-                👤
-              </div>
+              <div style={styles.icon}>👤</div>
 
-              <h3 style={styles.actionTitle}>
-                Profile
-              </h3>
+              <h3 style={styles.actionTitle}>Profile</h3>
 
               <p style={styles.actionText}>
                 View and manage your account
