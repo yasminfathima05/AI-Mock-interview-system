@@ -22,11 +22,28 @@ function Dashboard() {
         return;
       }
 
+      console.info("Dashboard statistics request started.", {
+        endpoint: "/api/dashboard/stats"
+      });
+
       try {
         const response = await api.get("/api/dashboard/stats", {
           headers: {
             Authorization: `Bearer ${token}`
           }
+        });
+
+        console.info("Dashboard statistics response received.", {
+          status: response.status,
+          success: response.data?.success === true,
+          hasStatistics: Boolean(response.data?.statistics),
+          hasCompletedInterviewCount: Number.isFinite(
+            response.data?.statistics?.completedInterviews
+          ),
+          hasAverageScore:
+            typeof response.data?.statistics?.averageScore === "number",
+          hasLatestScore:
+            typeof response.data?.statistics?.latestScore === "number"
         });
 
         if (!response.data.success || !response.data.statistics) {
@@ -38,6 +55,10 @@ function Dashboard() {
 
         setStatistics(response.data.statistics);
       } catch (error) {
+        console.warn("Dashboard statistics request failed.", {
+          status: error.response?.status ?? null,
+          code: error.code || "REQUEST_FAILED"
+        });
         setStatsError(
           error.response?.data?.message ||
             error.message ||

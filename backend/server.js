@@ -870,6 +870,8 @@ app.put(
 app.get(
   "/api/dashboard/stats",
   async (req, res) => {
+    console.info("Dashboard statistics request received.");
+
     try {
       const accessToken =
         req.headers.authorization?.replace(
@@ -878,6 +880,9 @@ app.get(
         );
 
       if (!accessToken) {
+        console.warn("Dashboard statistics authentication failed.", {
+          reason: "missing_token"
+        });
         return res.status(401).json({
           success: false,
           message: "Authentication required."
@@ -890,11 +895,16 @@ app.get(
       } = await supabase.auth.getUser(accessToken);
 
       if (userError || !user) {
+        console.warn("Dashboard statistics authentication failed.", {
+          reason: "invalid_token"
+        });
         return res.status(401).json({
           success: false,
           message: "Invalid or expired session."
         });
       }
+
+      console.info("Dashboard statistics authentication succeeded.");
 
       const userSupabase = createClient(
         process.env.SUPABASE_URL,
@@ -908,6 +918,7 @@ app.get(
         }
       );
 
+      console.info("Dashboard statistics session query started.");
       const {
         data: sessions,
         error: sessionsError
@@ -918,13 +929,20 @@ app.get(
         .eq("status", "completed");
 
       if (sessionsError) {
+        console.error("Dashboard statistics session query failed.", {
+          code: sessionsError.code || "UNKNOWN"
+        });
         return res.status(500).json({
           success: false,
-          message: sessionsError.message
+          message: "Unable to load dashboard statistics."
         });
       }
 
       const completedSessions = sessions || [];
+      console.info("Dashboard statistics sessions loaded.", {
+        completedSessionCount: completedSessions.length
+      });
+
       if (completedSessions.length === 0) {
         return res.json({
           success: true,
@@ -939,6 +957,7 @@ app.get(
       const sessionIds = completedSessions.map(
         (session) => session.id
       );
+      console.info("Dashboard statistics feedback query started.");
       const {
         data: feedback,
         error: feedbackError
@@ -948,9 +967,12 @@ app.get(
         .in("session_id", sessionIds);
 
       if (feedbackError) {
+        console.error("Dashboard statistics feedback query failed.", {
+          code: feedbackError.code || "UNKNOWN"
+        });
         return res.status(500).json({
           success: false,
-          message: feedbackError.message
+          message: "Unable to load dashboard statistics."
         });
       }
 
@@ -977,6 +999,11 @@ app.get(
           scores.length
       );
 
+      console.info("Dashboard statistics feedback loaded.", {
+        feedbackRowCount: (feedback || []).length,
+        validScoredInterviewCount: interviewAverages.length
+      });
+
       res.json({
         success: true,
         statistics: {
@@ -993,9 +1020,13 @@ app.get(
         }
       });
     } catch (error) {
+      console.error("Dashboard statistics request failed.", {
+        code: error.code || "UNKNOWN",
+        name: error.name || "Error"
+      });
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Unable to load dashboard statistics."
       });
     }
   }
